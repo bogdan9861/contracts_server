@@ -6,9 +6,9 @@ const jwt = require("jsonwebtoken");
 
 const register = async (req, res) => {
   try {
-    const { email, password, firstName, lastName } = req.body;
+    const { email, password, fullName, companyName } = req.body;
 
-    if (!email || !password || !firstName || !lastName) {
+    if (!email || !password || !fullName || !companyName) {
       return res.status(400).json({ message: "All fields are required" });
     }
 
@@ -29,8 +29,8 @@ const register = async (req, res) => {
 
     const user = await prisma.user.create({
       data: {
-        firstName,
-        lastName,
+        fullName,
+        companyName,
         email,
         password: hashedPassword,
       },
@@ -95,7 +95,7 @@ const login = async (req, res) => {
 
 const current = async (req, res) => {
   try {
-    res.status(200).json({ data: req.user });
+    res.status(200).json(req.user);
   } catch (error) {
     res.status(500).json({ message: "Unknown server error" });
   }
@@ -103,16 +103,20 @@ const current = async (req, res) => {
 
 const edit = async (req, res) => {
   try {
-    const { firstName, lastName, email } = req.body;
+    const { fullName, companyName, email } = req.body;
 
     const user = await prisma.user.update({
       where: {
         id: req.user.id,
       },
       data: {
-        firstName: firstName || req.user.firstName,
-        lastName: lastName || req.user.lastName,
+        fullName: fullName || req.user.fullName,
+        companyName: companyName || req.user.companyName,
         email: email || req.user.email,
+      },
+      include: {
+        clients: true,
+        contracts: true,
       },
     });
 
@@ -123,24 +127,9 @@ const edit = async (req, res) => {
   }
 };
 
-const getOperators = async (req, res) => {
-  try {
-    const users = await prisma.user.findMany({
-      where: {
-        role: "OPERATOR",
-      },
-    });
-
-    res.status(200).json(users);
-  } catch (error) {
-    res.status(500).json({ message: "Unknown server error" });
-  }
-};
-
 module.exports = {
   register,
   login,
   current,
   edit,
-  getOperators,
 };

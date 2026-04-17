@@ -7,149 +7,75 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum ClientStatus {
+  ACTIVE
+  NEW
+  CLOSED
+}
+
+enum ContractStatus {
+  ACTIVE
+  CLOSED
+  EXPIRED
+}
+
+enum AuditType {
+  CONTRACT_CREATED
+  CLIENT_CREATED
+  STATUS_CHANGED
+  CLIENT_UPDATED
+  CONTRACT_UPDATED
+}
+
 model User {
-  id            String            @id @default(uuid())
-  email         String            @unique
-  password      String
-  firstName     String
-  lastName      String
-  role          UserRole          @default(MANAGER)
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
-  tasks         MaintenanceTask[]
-  notifications Notification[]
+  id          String   @id @default(uuid())
+  email       String   @unique
+  password    String
+  fullName    String
+  companyName String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  contracts Contract[]
+  clients   Client[]
+  auditLogs AuditLog[]
 }
 
-model Product {
-  id                 String                @id @default(uuid())
-  name               String
-  serialNumber       String                @unique
-  description        String?
-  status             ProductStatus         @default(ACTIVE)
-  commissionDate     DateTime
-  totalUsageHours    Float                 @default(0)
-  createdAt          DateTime              @default(now())
-  updatedAt          DateTime              @updatedAt
-  imageUrl           String?
-  standartUsageHours Float                 @default(1100)
-  schedules          MaintenanceSchedule[]
-  tasks              MaintenanceTask[]
-  reports            Report[]
+model Contract {
+  id      String         @id @default(uuid())
+  status  ContractStatus @default(ACTIVE)
+  number  String
+  date    DateTime
+  sum     String
+  fileUrl String
+
+  user   User?   @relation(fields: [userId], references: [id])
+  userId String?
+
+  client   Client? @relation(fields: [clientId], references: [id])
+  clientId String?
 }
 
-model MaintenanceTemplate {
-  id             String                @id @default(uuid())
-  name           String
-  description    String?
-  type           MaintenanceType
-  estimatedHours Float?
-  createdAt      DateTime              @default(now())
-  updatedAt      DateTime              @updatedAt
-  schedules      MaintenanceSchedule[]
-}
+model Client {
+  id            String       @id @default(uuid())
+  companyName   String?
+  contactPerson String
+  email         String
+  phone         String
+  status        ClientStatus @default(NEW)
+  createDate    DateTime     @default(now())
 
-model MaintenanceSchedule {
-  id             String              @id @default(uuid())
-  productId      String
-  templateId     String
-  scheduleType   ScheduleType
-  intervalDays   Int?
-  intervalHours  Float?
-  lastExecutedAt DateTime?
-  lastUsageValue Float?
-  isActive       Boolean             @default(true)
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
-  product        Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
-  template       MaintenanceTemplate @relation(fields: [templateId], references: [id])
-  tasks          MaintenanceTask[]
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String?
 
-  @@index([productId], map: "MaintenanceSchedule_productId_fkey")
-  @@index([templateId], map: "MaintenanceSchedule_templateId_fkey")
-}
-
-model MaintenanceTask {
-  id              String               @id @default(uuid())
-  productId       String
-  scheduleId      String?
-  assignedToId    String?
-  status          TaskStatus           @default(PLANNED)
-  plannedDate     DateTime
-  dueDate         DateTime?
-  completedAt     DateTime?
-  usageAtCreation Float?
-  comment         String?
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
-  assignedTo      User?                @relation(fields: [assignedToId], references: [id])
-  product         Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
-  schedule        MaintenanceSchedule? @relation(fields: [scheduleId], references: [id])
-
-  @@index([assignedToId], map: "MaintenanceTask_assignedToId_fkey")
-  @@index([productId], map: "MaintenanceTask_productId_fkey")
-  @@index([scheduleId], map: "MaintenanceTask_scheduleId_fkey")
-}
-
-model Notification {
-  id        String   @id @default(uuid())
-  userId    String
-  title     String
-  message   String
-  isRead    Boolean  @default(false)
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id])
-
-  @@index([userId], map: "Notification_userId_fkey")
+  contracts Contract[]
 }
 
 model AuditLog {
-  id        String   @id @default(uuid())
-  entity    String
-  entityId  String
-  action    String
-  userId    String?
-  metadata  Json?
-  createdAt DateTime @default(now())
-}
+  id      String    @id @default(uuid())
+  type    AuditType
+  message String
 
-model Report {
-  id        String  @id @default(uuid())
-  title     String
-  fileUrl   String
-  productId String
-  product   Product @relation(fields: [productId], references: [id])
-
-  @@index([productId], map: "Report_productId_fkey")
-}
-
-enum UserRole {
-  ADMIN
-  ENGINEER
-  MANAGER
-}
-
-enum ProductStatus {
-  ACTIVE
-  INACTIVE
-  DECOMMISSIONED
-}
-
-enum MaintenanceType {
-  PREVENTIVE
-  CORRECTIVE
-  INSPECTION
-}
-
-enum ScheduleType {
-  BY_TIME
-  BY_USAGE
-  COMBINED
-}
-
-enum TaskStatus {
-  PLANNED
-  IN_PROGRESS
-  COMPLETED
-  OVERDUE
-  CANCELLED
+  user   User?   @relation(fields: [userId], references: [id])
+  userId String?
 }
