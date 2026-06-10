@@ -24,8 +24,10 @@ app.use("/public", express.static(path.join(__dirname, "public")));
 
 app.use("/api/users", require("./routes/users"));
 app.use("/api/clients", require("./routes/clients"));
+app.use("/api/companies", require("./routes/companies"));
 app.use("/api/contracts", require("./routes/contracts"));
 app.use("/api/dashboard", require("./routes/dashboard"));
+app.use("/api/notifications", require("./routes/notifications"));
 app.use("/api/logs", require("./routes/auditLogs"));
 
 module.exports = app;

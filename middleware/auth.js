@@ -11,8 +11,9 @@ const auth = async (req, res, next) => {
         id: decoded.id,
       },
       include: {
-        clients: true,
-        contracts: true,
+        contractsAsClient: true,
+        contractsAsOwner: true,
+        ownedCompany: true,
       },
     });
 

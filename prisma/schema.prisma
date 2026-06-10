@@ -7,75 +7,156 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum ClientStatus {
-  ACTIVE
-  NEW
-  CLOSED
+enum UserRole {
+  COMPANY_OWNER // Владелец компании
+  CLIENT // Клиент компании
+}
+
+enum ContractRequestStatus {
+  PENDING // Ожидает подтверждения
+  APPROVED // Подписан/Подтверждён
+  REJECTED // Отклонён
 }
 
 enum ContractStatus {
-  ACTIVE
-  CLOSED
-  EXPIRED
+  ACTIVE // Активный
+  EXPIRED // Просрочен
+  TERMINATED // Расторгнут
 }
 
-enum AuditType {
-  CONTRACT_CREATED
-  CLIENT_CREATED
-  STATUS_CHANGED
-  CLIENT_UPDATED
-  CONTRACT_UPDATED
+enum NotificationType {
+  CONTRACT_REQUEST_RECEIVED // Новый запрос на договор
+  CONTRACT_APPROVED // Договор подтверждён
+  CONTRACT_REJECTED // Договор отклонён
 }
 
 model User {
-  id          String   @id @default(uuid())
-  email       String   @unique
-  password    String
-  fullName    String
-  companyName String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  fullName  String
+  phone     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  role UserRole
+
+  // Если пользователь - владелец компании
+  ownedCompany   Company? @relation("CompanyOwner", fields: [ownedCompanyId], references: [id])
+  ownedCompanyId String?  @unique // Добавляем @unique для one-to-one связи
+
+  // Договоры, где пользователь выступает как владелец компании
+  contractsAsOwner Contract[] @relation("OwnerContracts")
+
+  // Договоры, где пользователь выступает как клиент
+  contractsAsClient Contract[] @relation("ClientContractsRelation")
+
+  // Уведомления
+  notifications Notification[]
+  auditLogs     AuditLog[]
+
+  @@map("users")
+}
+
+model Company {
+  id      String  @id @default(uuid())
+  name    String
+  address String?
+  phone   String?
+  email   String?
+  inn     String? @unique
+
+  owner   User?   @relation("CompanyOwner")
+  ownerId String? @unique
 
   contracts Contract[]
-  clients   Client[]
-  auditLogs AuditLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("companies")
 }
 
 model Contract {
-  id      String         @id @default(uuid())
-  status  ContractStatus @default(ACTIVE)
-  number  String
-  date    DateTime
-  sum     String
-  fileUrl String
+  id      String   @id @default(uuid())
+  number  String   @unique
+  date    DateTime @default(now())
+  sum     Decimal  @db.Decimal(10, 2)
+  fileUrl String? // Ссылка на файл договора
 
-  user   User?   @relation(fields: [userId], references: [id])
-  userId String?
+  // Статусы договора
+  requestStatus  ContractRequestStatus @default(PENDING) // Статус запроса
+  contractStatus ContractStatus        @default(ACTIVE) // Статус самого договора
 
-  client   Client? @relation(fields: [clientId], references: [id])
-  clientId String?
+  // Стороны договора
+  company   Company @relation(fields: [companyId], references: [id])
+  companyId String
+
+  owner   User   @relation("OwnerContracts", fields: [ownerId], references: [id])
+  ownerId String
+
+  client   User   @relation("ClientContractsRelation", fields: [clientId], references: [id])
+  clientId String
+
+  // Дата подписания/отклонения
+  reviewedAt     DateTime? // Дата рассмотрения запроса
+  signedAt       DateTime? // Дата подписания (если APPROVED)
+  rejectedAt     DateTime? // Дата отклонения (если REJECTED)
+  rejectedReason String? // Причина отклонения
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Связанные уведомления
+  notifications Notification[]
+
+  @@index([companyId])
+  @@index([ownerId])
+  @@index([clientId])
+  @@index([requestStatus])
+  @@map("contracts")
 }
 
-model Client {
-  id            String       @id @default(uuid())
-  companyName   String?
-  contactPerson String
-  email         String
-  phone         String
-  status        ClientStatus @default(NEW)
-  createDate    DateTime     @default(now())
-
-  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId String?
-
-  contracts Contract[]
-}
-
-model AuditLog {
-  id      String    @id @default(uuid())
-  type    AuditType
+model Notification {
+  id      String           @id @default(uuid())
+  title   String
   message String
+  type    NotificationType
+  isRead  Boolean          @default(false)
+
+  // Ссылка на договор (если уведомление связано с договором)
+  contract   Contract? @relation(fields: [contractId], references: [id])
+  contractId String?
+
+  // Получатель уведомления
+  user   User   @relation(fields: [userId], references: [id])
+  userId String
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([isRead])
+  @@map("notifications")
+}
+
+// Дополнительная модель для аудита действий
+model AuditLog {
+  id         String @id @default(uuid())
+  action     String // Действие (CREATE_CONTRACT, APPROVE_CONTRACT, REJECT_CONTRACT и т.д.)
+  entityType String // Тип сущности (Contract, User, Company)
+  entityId   String // ID сущности
+  oldValue   Json? // Старое значение (если обновление)
+  newValue   Json? // Новое значение
 
   user   User?   @relation(fields: [userId], references: [id])
   userId String?
+
+  ipAddress String? // IP адрес пользователя
+  userAgent String? // User-Agent браузера
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
 }

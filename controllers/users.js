@@ -6,9 +6,19 @@ const jwt = require("jsonwebtoken");
 
 const register = async (req, res) => {
   try {
-    const { email, password, fullName, companyName } = req.body;
+    const {
+      email,
+      password,
+      fullName,
+      companyName,
+      role,
+      companyAddress,
+      companyPhone,
+      companyEmail,
+      companyInn,
+    } = req.body;
 
-    if (!email || !password || !fullName || !companyName) {
+    if (!email || !password || !fullName) {
       return res.status(400).json({ message: "All fields are required" });
     }
 
@@ -27,27 +37,102 @@ const register = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    const user = await prisma.user.create({
-      data: {
-        fullName,
-        companyName,
-        email,
-        password: hashedPassword,
-      },
-    });
+    if (role === "COMPANY_OWNER") {
+      if (
+        !companyAddress ||
+        !companyEmail ||
+        !companyInn ||
+        !companyName ||
+        !companyPhone
+      ) {
+        return res
+          .status(400)
+          .json({ message: "Заполните все поля создания компании" });
+      }
 
-    if (!user) {
-      return res.status(400).json({ message: "Failed to register user" });
+      prisma.$transaction(
+        async (params) => {
+          const isCompanyExist = await prisma.company.findFirst({
+            where: {
+              name: companyName,
+            },
+          });
+
+          if (isCompanyExist) {
+            return res
+              .status(400)
+              .json({ message: "Компания с таким названием уже существует" });
+          }
+
+          try {
+            const user = await prisma.user.create({
+              data: {
+                fullName,
+                email,
+                password: hashedPassword,
+                role,
+              },
+              include: {
+                ownedCompany: true,
+              },
+            });
+
+            const company = await prisma.company.create({
+              data: {
+                name: companyName,
+                address: companyAddress,
+                email: companyEmail,
+                inn: companyInn,
+                ownerId: user.id,
+              },
+            });
+
+            await prisma.user.update({
+              where: {
+                id: user.id,
+              },
+              data: {
+                ownedCompanyId: company.id,
+              },
+            });
+
+            const token = jwt.sign({ id: user.id }, process.env.SECRET, {
+              expiresIn: "30d",
+            });
+
+            res.status(201).json({
+              ...user,
+              token,
+            });
+          } catch (error) {
+            console.log(e);
+
+            return res
+              .status(500)
+              .json({ message: "Не удалось создать пользователя с компанией" });
+          }
+        },
+        { timeout: 10000 },
+      );
+    } else {
+      const user = await prisma.user.create({
+        data: {
+          fullName,
+          email,
+          password: hashedPassword,
+          role,
+        },
+      });
+
+      const token = jwt.sign({ id: user.id }, process.env.SECRET, {
+        expiresIn: "30d",
+      });
+
+      res.status(201).json({
+        ...user,
+        token,
+      });
     }
-
-    const token = jwt.sign({ id: user.id }, process.env.SECRET, {
-      expiresIn: "30d",
-    });
-
-    res.status(201).json({
-      ...user,
-      token,
-    });
   } catch (error) {
     console.log(error);
 
@@ -111,12 +196,17 @@ const edit = async (req, res) => {
       },
       data: {
         fullName: fullName || req.user.fullName,
-        companyName: companyName || req.user.companyName,
+        ownedCompany: {
+          connect: {
+            name: companyName,
+          },
+        },
         email: email || req.user.email,
       },
       include: {
-        clients: true,
-        contracts: true,
+        contractsAsClient: true,
+        contractsAsOwner: true,
+        ownedCompany: true,
       },
     });
 
@@ -126,6 +216,14 @@ const edit = async (req, res) => {
     res.status(500).json({ message: "Unknown server error" });
   }
 };
+
+// const clientOffer = async (req, res) => {
+//   try {
+//     const {};
+//   } catch (error) {
+//     res.status(500).json({ message: "Unknown server error" });
+//   }
+// };
 
 module.exports = {
   register,

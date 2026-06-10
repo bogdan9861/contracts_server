@@ -127,9 +127,107 @@ const deleteClient = async (req, res) => {
   }
 };
 
+const getCompanyClients = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    // Проверяем, что пользователь - владелец компании
+    if (userRole !== "COMPANY_OWNER") {
+      return res
+        .status(403)
+        .json({ message: "Доступ запрещён. Только для владельцев компаний." });
+    }
+
+    // Получаем компанию пользователя
+    const userWithCompany = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        ownedCompany: true,
+      },
+    });
+
+    if (!userWithCompany?.ownedCompany) {
+      return res.status(200).json([]);
+    }
+
+    const companyId = userWithCompany.ownedCompany.id;
+
+    // Получаем всех уникальных клиентов, у которых есть договоры с этой компанией
+    const clients = await prisma.user.findMany({
+      where: {
+        role: "CLIENT",
+        contractsAsClient: {
+          some: {
+            companyId: companyId,
+          },
+        },
+      },
+      include: {
+        contractsAsClient: {
+          where: {
+            companyId: companyId,
+          },
+          select: {
+            id: true,
+            number: true,
+            sum: true,
+            date: true,
+            requestStatus: true,
+            contractStatus: true,
+            createdAt: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    // Форматируем ответ с дополнительной статистикой по каждому клиенту
+    const formattedClients = clients.map((client) => {
+      const contracts = client.contractsAsClient;
+      const activeContracts = contracts.filter(
+        (c) => c.contractStatus === "ACTIVE" && c.requestStatus === "APPROVED",
+      ).length;
+      const totalContractsSum = contracts
+        .filter((c) => c.requestStatus === "APPROVED")
+        .reduce((sum, c) => sum + Number(c.sum), 0);
+
+      return {
+        id: client.id,
+        fullName: client.fullName,
+        email: client.email,
+        phone: client.phone,
+        createdAt: client.createdAt,
+        contractsCount: contracts.length,
+        activeContractsCount: activeContracts,
+        totalContractsSum: totalContractsSum,
+        contracts: contracts.map((c) => ({
+          id: c.id,
+          number: c.number,
+          sum: c.sum,
+          date: c.date,
+          requestStatus: c.requestStatus,
+          contractStatus: c.contractStatus,
+        })),
+      };
+    });
+
+    res.status(200).json(formattedClients);
+  } catch (error) {
+    console.error("Error in getCompanyClients:", error);
+    res.status(500).json({
+      message: "Ошибка при получении списка клиентов",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   createClient,
   getMyClients,
   editClient,
   deleteClient,
+  getCompanyClients,
 };
