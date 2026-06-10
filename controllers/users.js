@@ -217,17 +217,39 @@ const edit = async (req, res) => {
   }
 };
 
-// const clientOffer = async (req, res) => {
-//   try {
-//     const {};
-//   } catch (error) {
-//     res.status(500).json({ message: "Unknown server error" });
-//   }
-// };
+const removeUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    await prisma.user.delete({
+      where: {
+        id,
+      },
+    });
+
+    res.status(200).json({ message: "success" });
+  } catch (error) {
+    console.log(error);
+
+    res.status(500).json({ message: "Unknown server error" });
+  }
+};
+
+const getAllUsers = async (req, res) => {
+  try {
+    const users = await prisma.user.findMany();
+
+    res.status(200).json(users);
+  } catch (error) {
+    res.status(500).json({ message: "Unknown server error" });
+  }
+};
 
 module.exports = {
   register,
   login,
   current,
   edit,
+  getAllUsers,
+  removeUser,
 };

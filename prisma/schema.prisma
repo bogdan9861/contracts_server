@@ -8,26 +8,27 @@ datasource db {
 }
 
 enum UserRole {
-  COMPANY_OWNER // Владелец компании
-  CLIENT // Клиент компании
+  COMPANY_OWNER
+  CLIENT
+  ADMIN
 }
 
 enum ContractRequestStatus {
-  PENDING // Ожидает подтверждения
-  APPROVED // Подписан/Подтверждён
-  REJECTED // Отклонён
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 enum ContractStatus {
-  ACTIVE // Активный
-  EXPIRED // Просрочен
-  TERMINATED // Расторгнут
+  ACTIVE
+  EXPIRED
+  TERMINATED
 }
 
 enum NotificationType {
-  CONTRACT_REQUEST_RECEIVED // Новый запрос на договор
-  CONTRACT_APPROVED // Договор подтверждён
-  CONTRACT_REJECTED // Договор отклонён
+  CONTRACT_REQUEST_RECEIVED
+  CONTRACT_APPROVED
+  CONTRACT_REJECTED
 }
 
 model User {
